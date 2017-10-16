@@ -245,7 +245,7 @@ void Host::startPeerSession(Public const& _id, RLP const& _rlp, unique_ptr<RLPXF
 		else
 		{
 			// peer doesn't exist, try to get port info from node table
-			if (m_nodeTable)
+			if (atomic_load(&m_nodeTable))
 				if (Node n = m_nodeTable->node(_id))
 					p = make_shared<Peer>(n);
 
@@ -510,7 +510,7 @@ void Host::addNode(NodeID const& _node, NodeIPEndpoint const& _endpoint)
 	if (_endpoint.tcpPort < 30300 || _endpoint.tcpPort > 30305)
 		clog(NetConnect) << "Non-standard port being recorded: " << _endpoint.tcpPort;
 
-	if (m_nodeTable)
+	if (atomic_load(&m_nodeTable))
 		m_nodeTable->addNode(Node(_node, _endpoint));
 }
 
@@ -542,10 +542,10 @@ void Host::requirePeer(NodeID const& _n, NodeIPEndpoint const& _endpoint)
 				m_peers[_n] = p;
 			}
 		// required for discovery
-		if (m_nodeTable)
+		if (atomic_load(&m_nodeTable))
 			m_nodeTable->addNode(*p, NodeTable::NodeRelation::Unknown);
 	}
-	else if (m_nodeTable)
+	else if (atomic_load(&m_nodeTable))
 	{
 		m_nodeTable->addNode(node);
 		auto t = make_shared<boost::asio::deadline_timer>(m_ioService);
@@ -553,7 +553,7 @@ void Host::requirePeer(NodeID const& _n, NodeIPEndpoint const& _endpoint)
 		t->async_wait([this, _n](boost::system::error_code const& _ec)
 		{
 			if (!_ec)
-				if (m_nodeTable)
+				if (atomic_load(&m_nodeTable))
 					if (auto n = m_nodeTable->node(_n))
 						requirePeer(n.id, n.endpoint);
 		});
@@ -580,7 +580,7 @@ void Host::connect(std::shared_ptr<Peer> const& _p)
 		return;
 	}
 
-	if (!!m_nodeTable && !m_nodeTable->haveNode(_p->id) && _p->peerType == PeerType::Optional)
+	if (!!atomic_load(&m_nodeTable) && !m_nodeTable->haveNode(_p->id) && _p->peerType == PeerType::Optional)
 		return;
 
 	// prevent concurrently connecting to a node
@@ -758,7 +758,7 @@ void Host::startedWorking()
 		m_netPrefs.discovery
 	);
 	nodeTable->setEventHandler(new HostNodeTableHandler(*this));
-	m_nodeTable = nodeTable;
+	atomic_store(&m_nodeTable, nodeTable);
 	restoreNetwork(&m_restoreNetwork);
 
 	clog(NetP2PNote) << "p2p.started id:" << id();
@@ -843,7 +843,7 @@ bytes Host::saveNetwork() const
 		}
 	}
 
-	if (!!m_nodeTable)
+	if (!!atomic_load(&m_nodeTable))
 	{
 		auto state = m_nodeTable->snapshot();
 		state.sort();

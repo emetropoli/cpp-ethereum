@@ -221,7 +221,7 @@ public:
 	ReputationManager& repMan() { return m_repMan; }
 
 	/// @returns if network is started and interactive.
-	bool haveNetwork() const { Guard l(x_runTimer); return m_run && !!m_nodeTable; }
+	bool haveNetwork() const { Guard l(x_runTimer); return m_run && !!atomic_load(&m_nodeTable); }
 	
 	/// Validates and starts peer session, taking ownership of _io. Disconnects and returns false upon error.
 	void startPeerSession(Public const& _id, RLP const& _hello, std::unique_ptr<RLPXFrameCoder>&& _io, std::shared_ptr<RLPXSocket> const& _s);
